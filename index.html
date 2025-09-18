@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>问卷预览（Excel Online 驱动）</title>
+<link rel="stylesheet" href="https://unpkg.com/survey-core/defaultV2.min.css">
+<script src="https://unpkg.com/survey-core/survey.core.min.js"></script>
+<script src="https://unpkg.com/survey-knockout-ui/survey-knockout-ui.min.js"></script>
+
+<div style="max-width:960px;margin:24px auto">
+  <h2>问卷预览（只读；同事只需改 Excel）</h2>
+  <div style="margin:8px 0">
+    <button id="reload">手动刷新</button>
+    <label style="margin-left:12px"><input id="autoref" type="checkbox" checked> 自动刷新（10秒）</label>
+    <span id="status" style="margin-left:12px;color:#888"></span>
+  </div>
+  <div id="app"></div>
+</div>
+
+<script>
+const SCHEMA_URL = "https://benhealthcn-my.sharepoint.com/:u:/g/personal/skye_zhao_missioninsight_com_cn/EaD8GQTJj3JAuYAJXpVPXAgB7QdlCkS6-mKlzdhTYwzXLA?e=HrRVvT&download=1";
+</script>
+
+let timer=null; const statusEl=document.getElementById('status');
+function ts(){return new Date().toLocaleTimeString();}
+function fetchSchema(){
+  statusEl.textContent="加载中…";
+  const url = SCHEMA_URL + (SCHEMA_URL.includes("?")?"&":"?") + "_=" + Date.now(); // 反缓存
+  return fetch(url,{cache:"no-store"})
+    .then(r=>r.json())
+    .then(schema=>{
+      const survey=new Survey.Model(schema);
+      survey.onComplete.add(()=>alert("预览模式：不保存答卷"));
+      document.getElementById("app").innerHTML="";
+      survey.render("app");
+      statusEl.textContent="已更新："+ts();
+    })
+    .catch(e=>{
+      statusEl.textContent="加载失败："+e;
+      console.error(e);
+    });
+}
+document.getElementById("reload").onclick=fetchSchema;
+
+// 自动刷新 10 秒一次；切回到这个标签页时也刷新（接近“实时”）
+const auto=document.getElementById("autoref");
+auto.onchange=()=>{ if(auto.checked){timer=setInterval(fetchSchema,10000);} else{clearInterval(timer);} };
+window.addEventListener("focus",()=>auto.checked&&fetchSchema());
+
+// 首次加载
+fetchSchema(); timer=setInterval(fetchSchema,10000);
+</script>
