@@ -1,17 +1,16 @@
 {
-  "title": "问卷预览",
+  "title": "问卷标题",
   "showQuestionNumbers": "on",
   "pages": [
     {
-      "name": "page1",
+      "name": "p1",
+      "title": "第一页",
       "elements": [
-        { "type": "text", "name": "q1", "title": "您的姓名？" },
-        {
-          "type": "radiogroup",
-          "name": "q2",
-          "title": "您的性别？",
-          "choices": ["男", "女"]
-        }
+        { "type": "text",       "name": "q1", "title": "单行文本题", "isRequired": true },
+        { "type": "radiogroup", "name": "q2", "title": "单选题", "choices": ["选项A", "选项B", "选项C"] },
+        { "type": "checkbox",   "name": "q3", "title": "多选题", "choices": ["选项1", "选项2", "选项3"] },
+        { "type": "dropdown",   "name": "q4", "title": "下拉题", "choices": ["A", "B", "C"] },
+        { "type": "comment",    "name": "q5", "title": "多行文本题" }
       ]
     }
   ]
