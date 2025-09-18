@@ -1,0 +1,116 @@
+name: Update survey from Excel
+
+on:
+  workflow_dispatch:   # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download Excel from OneDrive
+        env:
+          OD_PUBLIC_URL: ${{ secrets.OD_PUBLIC_URL }}
+        run: |
+          # 通过公开直链下载 OneDrive 上的 qbank.xlsx
+          # 你的链接在 Settings → Secrets → Actions 里存成 OD_PUBLIC_URL
+          curl -L "$OD_PUBLIC_URL" -o qbank.xlsx
+          ls -lh qbank.xlsx
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas openpyxl
+
+      - name: Generate survey.json from Excel
+        run: |
+          python - <<'PY'
+          import pandas as pd, json
+          xls='qbank.xlsx'
+          # 读取 questions 表
+          df=pd.read_excel(xls, sheet_name='questions', dtype=str).fillna('')
+
+          # 读取 pages（如果没有就建一个 page1）
+          pages={}
+          try:
+              p=pd.read_excel(xls, sheet_name='pages', dtype=str).fillna('')
+              for i,r in p.iterrows():
+                  name=r.get('name') or f'page{i+1}'
+                  pages[name]={'name':name,'title':r.get('title') or name,'description':r.get('description',''),'elements':[]}
+          except Exception:
+              pages['page1']={'name':'page1','title':'问卷内容','elements':[]}
+
+          def split_pipe(s):
+              return [x.strip() for x in (s or '').replace('｜','|').split('|') if x.strip()]
+
+          def get_choices(s):
+              out=[]
+              for item in split_pipe(s or ''):
+                  if ':' in item:
+                      v,t=item.split(':',1)
+                      out.append({'value':v.strip(),'text':t.strip()})
+                  else:
+                      out.append(item)
+              return out
+
+          for i,r in df.iterrows():
+              qt=(r.get('type','') or '').lower()
+              q={'name': r.get('qid') or f'q{i+1}', 'title': r.get('title','')}
+
+              if qt in ('single','radio','radiogroup'):
+                  q['type']='radiogroup'; q['choices']=get_choices(r.get('options',''))
+              elif qt in ('multiple','checkbox'):
+                  q['type']='checkbox'; q['choices']=get_choices(r.get('options',''))
+              elif qt in ('dropdown','select'):
+                  q['type']='dropdown'; q['choices']=get_choices(r.get('options',''))
+              elif qt in ('text','string','number','numeric','email','url','date','time'):
+                  q['type']='text'
+                  mp={'number':'number','numeric':'number','email':'email','url':'url','date':'date','time':'time'}
+                  if qt in mp: q['inputType']=mp[qt]
+              elif qt=='matrix' or qt=='matrix_single':
+                  q['type']='matrix'
+                  q['rows']=[{'value':v,'text':v} for v in split_pipe(r.get('rows',''))]
+                  q['columns']=[{'value':v,'text':v} for v in split_pipe(r.get('cols','') or r.get('columns',''))]
+              elif qt=='matrix_multiple':
+                  q['type']='matrixdynamic'
+                  q['columns']=[{'name':c,'title':c} for c in split_pipe(r.get('cols','') or r.get('columns',''))]
+              else:
+                  q['type']='text'
+
+              if (r.get('required','').strip().lower() in ('yes','true','1')):
+                  q['isRequired']=True
+              if r.get('visible_if',''):
+                  q['visibleIf']=r['visible_if']
+
+              page=r.get('page') or list(pages.keys())[0]
+              pages.setdefault(page, {'name':page,'title':page,'elements':[]})
+              pages[page]['elements'].append(q)
+
+          survey={'title':'问卷预览','showQuestionNumbers':'on','showProgressBar':'top',
+                  'pages':[v for v in pages.values() if v['elements']]}
+
+          with open('survey.json','w',encoding='utf-8') as f:
+              json.dump(survey,f,ensure_ascii=False,indent=2)
+
+          print('OK, survey.json generated.')
+          PY
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add survey.json qbank.xlsx || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Auto update survey.json from OneDrive Excel"
+            git push
+          fi
