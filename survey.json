@@ -1,0 +1,18 @@
+{
+  "title": "问卷预览",
+  "showQuestionNumbers": "on",
+  "pages": [
+    {
+      "name": "page1",
+      "elements": [
+        { "type": "text", "name": "q1", "title": "您的姓名？" },
+        {
+          "type": "radiogroup",
+          "name": "q2",
+          "title": "您的性别？",
+          "choices": ["男", "女"]
+        }
+      ]
+    }
+  ]
+}
