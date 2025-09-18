@@ -1,8 +1,16 @@
 name: Update survey from Excel
 
 on:
-  workflow_dispatch:   # 允许手动触发
+  workflow_dispatch:        # 手动运行
+  # 也可以加 push 触发（可选）
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - ".github/workflows/update-survey.yml"
 
+permissions:
+  contents: write
+  
 jobs:
   build:
     runs-on: ubuntu-latest
