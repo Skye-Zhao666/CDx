@@ -1,50 +1,86 @@
-<!doctype html>
-<meta charset="utf-8">
-<title>问卷预览（Excel Online 驱动）</title>
-<link rel="stylesheet" href="https://unpkg.com/survey-core/defaultV2.min.css">
-<script src="https://unpkg.com/survey-core/survey.core.min.js"></script>
-<script src="https://unpkg.com/survey-knockout-ui/survey-knockout-ui.min.js"></script>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>问卷预览</title>
 
-<div style="max-width:960px;margin:24px auto">
-  <h2>问卷预览（只读；同事只需改 Excel）</h2>
-  <div style="margin:8px 0">
+  <!-- SurveyJS 样式与脚本（使用 jQuery 版，纯展示即可） -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/survey-core@1.9.137/modern.min.css" />
+  <script src="https://unpkg.com/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://unpkg.com/survey-jquery@1.9.137/survey.jquery.min.js"></script>
+
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC",
+           "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+           margin: 24px; }
+    #toolbar { margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+    #status { color:#666; }
+  </style>
+</head>
+<body>
+  <h2>问卷预览</h2>
+
+  <div id="toolbar">
     <button id="reload">手动刷新</button>
-    <label style="margin-left:12px"><input id="autoref" type="checkbox" checked> 自动刷新（10秒）</label>
-    <span id="status" style="margin-left:12px;color:#888"></span>
+    <label><input type="checkbox" id="autoref" checked /> 自动刷新（10秒）</label>
+    <span id="status"></span>
   </div>
+
   <div id="app"></div>
-</div>
 
-<script>
-const SCHEMA_URL = "https://benhealthcn-my.sharepoint.com/:u:/g/personal/skye_zhao_missioninsight_com_cn/EaD8GQTJj3JAuYAJXpVPXAgB7QdlCkS6-mKlzdhTYwzXLA?e=HrRVvT&download=1";
-</script>
+  <script>
+    // ！！把下面这个链接换成你 OneDrive 的 survey.json “可匿名访问 + &download=1”的链接
+    const SCHEMA_URL =
+      "https://benhealthcn-my.sharepoint.com/:u:/g/personal/skye_zhao_missioninsight_com_cn/EaDBGQTJj3JAuYAJXpVPXAgB7QdlCkS6-mKIzdhTYwzXLA?e=HrRVvT&download=1";
 
-let timer=null; const statusEl=document.getElementById('status');
-function ts(){return new Date().toLocaleTimeString();}
-function fetchSchema(){
-  statusEl.textContent="加载中…";
-  const url = SCHEMA_URL + (SCHEMA_URL.includes("?")?"&":"?") + "_=" + Date.now(); // 反缓存
-  return fetch(url,{cache:"no-store"})
-    .then(r=>r.json())
-    .then(schema=>{
-      const survey=new Survey.Model(schema);
-      survey.onComplete.add(()=>alert("预览模式：不保存答卷"));
-      document.getElementById("app").innerHTML="";
-      survey.render("app");
-      statusEl.textContent="已更新："+ts();
-    })
-    .catch(e=>{
-      statusEl.textContent="加载失败："+e;
-      console.error(e);
-    });
-}
-document.getElementById("reload").onclick=fetchSchema;
+    // -------- 下面无需改动 --------
+    Survey.StylesManager.applyTheme("modern");
 
-// 自动刷新 10 秒一次；切回到这个标签页时也刷新（接近“实时”）
-const auto=document.getElementById("autoref");
-auto.onchange=()=>{ if(auto.checked){timer=setInterval(fetchSchema,10000);} else{clearInterval(timer);} };
-window.addEventListener("focus",()=>auto.checked&&fetchSchema());
+    const appEl    = document.getElementById("app");
+    const statusEl = document.getElementById("status");
+    const reloadEl = document.getElementById("reload");
+    const autoEl   = document.getElementById("autoref");
 
-// 首次加载
-fetchSchema(); timer=setInterval(fetchSchema,10000);
-</script>
+    let timer = null;
+    const ts = () => new Date().toLocaleTimeString();
+
+    async function fetchSchema() {
+      try {
+        statusEl.textContent = "加载中…";
+        const url = SCHEMA_URL + (SCHEMA_URL.includes("?") ? "&" : "?") + "_=" + Date.now(); // 反缓存
+        const res = await fetch(url, { cache: "no-store" });
+        const schema = await res.json();
+
+        // 渲染
+        appEl.innerHTML = "";
+        const model = new Survey.Model(schema);
+        $(appEl).Survey({ model });
+
+        statusEl.textContent = "已更新：" + ts();
+      } catch (e) {
+        statusEl.textContent = "加载失败：" + e;
+        console.error(e);
+      }
+    }
+
+    // 手动刷新
+    reloadEl.onclick = fetchSchema;
+
+    // 自动刷新（获得焦点时若勾选自动刷新，也会立即拉取）
+    function startAuto() {
+      clearInterval(timer);
+      if (autoEl.checked) {
+        timer = setInterval(fetchSchema, 10000);
+      }
+    }
+    autoEl.onchange = startAuto;
+    window.addEventListener("focus", () => autoEl.checked && fetchSchema());
+
+    // 首次加载
+    fetchSchema();
+    startAuto();
+  </script>
+</body>
+</html>
