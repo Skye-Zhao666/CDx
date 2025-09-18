@@ -1,43 +1,71 @@
+
+
 name: Update survey from Excel
 
 on:
-  workflow_dispatch:   # 只保留手动触发
+  workflow_dispatch:        # 手动触发
 
 permissions:
-  contents: write      # 允许工作流向仓库推送 commit
+  contents: write
 
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check secret exists
+      - name: Dump secret length & host (for debug)
+        env:
+          OD_PUBLIC_URL: ${{ secrets.OD_PUBLIC_URL }}
         run: |
-          if [ -z "${OD_PUBLIC_URL}" ]; then
-            echo "OD_PUBLIC_URL is empty! Please set repository secret."
-            exit 1
+          if [ -z "$OD_PUBLIC_URL" ]; then
+            echo "❌ OD_PUBLIC_URL is empty"; exit 1
           fi
-        env:
-          OD_PUBLIC_URL: ${{ secrets.OD_PUBLIC_URL }}
+          echo "URL length: ${#OD_PUBLIC_URL}"
+          python3 - <<'PY'
+import os,urllib.parse
+u=os.environ['OD_PUBLIC_URL'].strip()
+host=urllib.parse.urlsplit(u).netloc
+print("Host:", host)
+PY
 
-      - name: Download survey.json from OneDrive/SharePoint
-        run: |
-          curl -L "$OD_PUBLIC_URL" -o survey.json
-          echo "Downloaded size:"
-          ls -l survey.json
+      - name: Download survey.json from OneDrive (quoted URL)
         env:
           OD_PUBLIC_URL: ${{ secrets.OD_PUBLIC_URL }}
+        run: |
+          # 注意双引号！防止 &download=1 被 shell 解释
+          curl -fL --retry 3 "$OD_PUBLIC_URL" -o survey.json
+          echo "----- file info -----"
+          ls -lh survey.json || true
+          file survey.json || true
+          head -c 200 survey.json || true
+          echo
+
+      - name: Validate JSON
+        run: |
+          python3 - <<'PY'
+import json,sys
+with open('survey.json','rb') as f:
+    data=f.read(2048)
+    try:
+        json.loads(data.decode('utf-8',errors='ignore'))
+        print("✅ survey.json looks like JSON")
+    except Exception as e:
+        print("❌ Not JSON, first 200 bytes below:")
+        print(data[:200])
+        sys.exit(1)
+PY
 
       - name: Commit & push if changed
         run: |
-          if git diff --quiet --exit-code survey.json; then
-            echo "No change in survey.json."
-          else
-            git config user.name  "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add survey.json
-            git commit -m "chore: update survey.json from OneDrive $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            git push
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add survey.json
+          if git diff --cached --quiet; then
+            echo "No change to commit."
+            exit 0
           fi
+          git commit -m "chore: update survey.json from OneDrive"
+          git push
